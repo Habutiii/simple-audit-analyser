@@ -1,0 +1,10 @@
+### Start log collection
+```sh
+./audit-ctl.sh start
+```
+
+Run malicious activity
+
+```sh
+./audit-ctl.sh stop
+```
