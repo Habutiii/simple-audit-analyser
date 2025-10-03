@@ -31,78 +31,39 @@ cat > $audit_rule_path << 'EOF'
 # Exclude SELinux daemon noise (works with SELinux)
 -a never,exit -S all -F subj_type=pulseaudio_t -F subj_type=ntpd_t -F subj_type=cron_t
 
-# Exclude cron jobs to reduce log noise
+## Cron jobs fill the logs with stuff we normally don't want (works with SELinux) 
 -a never,user -F subj_type=crond_t
 -a exit,never -F subj_type=crond_t
 -a never,user -F subj_type=cron_t
 -a exit,never -F subj_type=cron_t
 
-# Exclude unlogged users (auid=-1)
--a never,exit -F auid=4294967295
+## Process execution (argv + cwd)
+-a always,exit -F arch=b64 -S execve,execveat -k exec
+-a always,exit -F arch=b32 -S execve,execveat -k exec
+-a always,exit -F arch=b64 -S chdir -k chdir
 
-# Exclude noise from common system directories
--a never,exit -F dir=/sys/fs/cgroup
--a never,exit -F dir=/sys/kernel
--a never,exit -F dir=/proc
--a never,exit -F dir=/dev/pts
+## File system access (will generate PATH records)
+-a always,exit -F arch=b64 -S open,openat,creat,truncate,ftruncate,unlink,unlinkat,rename,renameat,link,linkat,symlink,symlinkat,chmod,fchmod,fchmodat,chown,fchown,fchownat -k file
 
-# === PROCESS CONTROL MONITORING ===
-# Monitor process creation and termination
--a always,exit -S execve -k process_exec
--a always,exit -S clone,fork,vfork -k process_creation
--a always,exit -S exit,exit_group -k process_termination
+## Directory watches
+-w / -p rwxa
 
-# === FILE SYSTEM MONITORING ===
-# Monitor file access and modifications
--a always,exit -S open,openat,creat -k file_access
--a always,exit -S close,read,write -k file_io
--a always,exit -S unlink,unlinkat,rmdir -k file_deletion
--a always,exit -S mkdir,mkdirat -k directory_creation
--a always,exit -S rename,renameat,renameat2 -k file_rename
--a always,exit -S link,linkat,symlink,symlinkat -k file_linking
--a always,exit -S chmod,fchmod,fchmodat -k file_permissions
--a always,exit -S chown,fchown,lchown,fchownat -k file_ownership
+## Network activity (IPs and ports)
+-a always,exit -F arch=b64 -S socket -k net
+-a always,exit -F arch=b64 -S connect,accept,accept4,bind,listen -k net
+-a always,exit -F arch=b64 -S getsockname,getpeername -k net
+-a always,exit -F arch=b64 -S sendto,recvfrom,sendmsg,recvmsg -k net
 
-# === NETWORK MONITORING ===
-# Monitor network operations
--a always,exit -S socket -k network_socket
--a always,exit -S connect -k network_connect
--a always,exit -S bind -k network_bind
--a always,exit -S listen -k network_listen
--a always,exit -S accept,accept4 -k network_accept
--a always,exit -S sendto,sendmsg,sendmmsg -k network_send
--a always,exit -S recvfrom,recvmsg,recvmmsg -k network_recv
+## Privilege escalation attempts
+-a always,exit -F arch=b64 -S setuid,setgid,setresuid,setresgid -k ids
+-a always,exit -F arch=b64 -S setreuid,setregid -k ids
+-a always,exit -F arch=b64 -S chmod,fchmod,fchmodat -k perms
 
-# === PRIVILEGE ESCALATION MONITORING ===
-# Monitor privilege changes
--a always,exit -S setuid,setreuid,setresuid -k privilege_setuid
--a always,exit -S setgid,setregid,setresgid -k privilege_setgid
--a always,exit -S setfsuid,setfsgid -k privilege_setfs
--a always,exit -S capset -k capability_change
-
-# === SYSTEM INFORMATION MONITORING ===
-# Monitor system information access
--a always,exit -S uname -k system_info
--a always,exit -S getpid,getppid,gettid -k process_info
--a always,exit -S getuid,geteuid,getgid,getegid -k identity_info
-
-# === INTER-PROCESS COMMUNICATION ===
-# Monitor IPC mechanisms
--a always,exit -S pipe,pipe2 -k ipc_pipe
--a always,exit -S mq_open,mq_unlink,mq_timedsend,mq_timedreceive -k ipc_mqueue
--a always,exit -S msgget,msgsnd,msgrcv,msgctl -k ipc_sysv_msg
--a always,exit -S semget,semop,semctl -k ipc_sysv_sem
--a always,exit -S shmget,shmat,shmdt,shmctl -k ipc_sysv_shm
-
-# === MEMORY MANAGEMENT ===
-# Monitor memory operations that could be security relevant
--a always,exit -S mmap,munmap,mprotect -k memory_management
--a always,exit -S brk,sbrk -k memory_heap
-
-# === SIGNAL HANDLING ===
-# Monitor signal operations
--a always,exit -S kill,tkill,tgkill -k signal_send
--a always,exit -S signal,sigaction,rt_sigaction -k signal_handler
+## Persistence indicators
+-a always,exit -F arch=b64 -S init_module,delete_module -k modules
+-w /etc/cron.d/ -p wa -k cron_watch
+-w /etc/cron.daily/ -p wa -k cron_watch
+-w /etc/systemd/ -p wa -k systemd_watch
 
 EOF
 
